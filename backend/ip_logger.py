@@ -8,29 +8,35 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)  # Habilitar CORS para todas las rutas
 
+# ----------- Función para obtener IP real -----------
+def get_real_ip(req):
+    """Intenta obtener la IP real del visitante, incluso detrás de un proxy o CDN."""
+    for header in ['X-Forwarded-For', 'X-Real-IP', 'CF-Connecting-IP']:
+        if header in req.headers:
+            return req.headers[header].split(',')[0].strip()
+    return req.remote_addr
+
+
+# ----------- Ruta principal: pixel tracking invisible -----------
 @app.route('/')
 def index():
-    # Obtener IP: si X-Forwarded-For existe (detrás de proxy), sino usa remote_addr
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    ip = get_real_ip(request)
     
-    # Recopilar información de cabeceras HTTP
-    headers_info = {}
-    for header, value in request.headers:
-        headers_info[header] = value
+    headers_info = {header: value for header, value in request.headers}
     
-    # Intentar obtener información geográfica
     try:
         geo = requests.get(f"http://ip-api.com/json/{ip}").json()
-        location = f"{geo.get('city', 'Unknown')}, {geo.get('country', 'Unknown')} - ISP: {geo.get('isp', 'Unknown')}"
+        if geo.get("status") == "success":
+            location = f"{geo.get('city', 'Unknown')}, {geo.get('country', 'Unknown')} - ISP: {geo.get('isp', 'Unknown')}"
+        else:
+            location = "Ubicación no disponible"
         geo_info = geo
     except Exception as e:
-        location = "Geo info not available"
+        location = "Error al obtener geolocalización"
         geo_info = {"error": str(e)}
     
-    # Registrar timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Crear registro completo
     log_entry = {
         "timestamp": timestamp,
         "ip": ip,
@@ -44,84 +50,77 @@ def index():
         "cookies": dict(request.cookies)
     }
     
-    # Guardar log en formato JSON para mejor procesamiento
     with open("logs.txt", "a") as f:
         f.write(f"[{timestamp}] IP: {ip} - {location}\n")
     
-    # Guardar log detallado en formato JSON
     with open("detailed_logs.json", "a") as f:
         f.write(json.dumps(log_entry) + "\n")
     
-    # Retornar una imagen transparente 1x1 para tracking pixel
-    return '', 204
+    return '', 204  # Imagen transparente
 
+
+# ----------- Ruta para recibir eventos o info del navegador -----------
 @app.route('/info', methods=['POST', 'OPTIONS'])
 def info():
-    # Manejar preflight requests para CORS
     if request.method == 'OPTIONS':
         return '', 204
-    
-    # Procesar datos recibidos del cliente
+
     try:
         data = request.json
-        
-        # Añadir información de cabeceras y IP
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        ip = get_real_ip(request)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Crear un registro completo
+
         log_entry = {
             "timestamp": timestamp,
             "ip": ip,
             "user_agent": request.headers.get('User-Agent', 'Unknown'),
             "data": data
         }
-        
-        # Guardar en formato legible
+
         with open("extra_info.txt", "a") as f:
             f.write(f"[{timestamp}] IP: {ip} - {json.dumps(data)}\n")
-        
-        # Guardar en formato JSON para mejor procesamiento
+
         with open("extra_info.json", "a") as f:
             f.write(json.dumps(log_entry) + "\n")
-            
+
         return '', 204
     except Exception as e:
         print(f"Error processing data: {str(e)}")
         return jsonify({"error": str(e)}), 400
 
+
+# ----------- Ver logs en texto (protegido con contraseña) -----------
 @app.route('/logs')
 def ver_logs():
-    logs = ""
-    
-    # Verificar si hay parámetro de contraseña (básico, no seguro para producción)
     if request.args.get('password') != 'tu_contraseña_secreta':
         return "Acceso denegado. Se requiere contraseña.", 403
-    
+
+    logs = ""
+
     try:
         with open("logs.txt", "r") as f:
             logs += "Logs de IP:\n" + f.read()
     except Exception as e:
         logs += f"No se pudo leer logs.txt: {str(e)}\n"
-    
+
     try:
         with open("extra_info.txt", "r") as f:
             logs += "\nExtra Info:\n" + f.read()
     except Exception as e:
         logs += f"\nNo se pudo leer extra_info.txt: {str(e)}\n"
-    
+
     return f"<pre>{logs}</pre>"
 
+
+# ----------- Ver logs en JSON (protegido) -----------
 @app.route('/json-logs')
 def json_logs():
-    # Verificar si hay parámetro de contraseña (básico, no seguro para producción)
     if request.args.get('password') != 'tu_contraseña_secreta':
         return jsonify({"error": "Acceso denegado. Se requiere contraseña."}), 403
-    
-    # Leer logs JSON
+
     detailed_logs = []
     extra_info = []
-    
+
     try:
         if os.path.exists("detailed_logs.json"):
             with open("detailed_logs.json", "r") as f:
@@ -130,9 +129,9 @@ def json_logs():
                         detailed_logs.append(json.loads(line))
                     except:
                         pass
-    except Exception as e:
+    except:
         pass
-    
+
     try:
         if os.path.exists("extra_info.json"):
             with open("extra_info.json", "r") as f:
@@ -141,19 +140,19 @@ def json_logs():
                         extra_info.append(json.loads(line))
                     except:
                         pass
-    except Exception as e:
+    except:
         pass
-    
+
     return jsonify({
         "ip_logs": detailed_logs,
         "browser_info": extra_info
     })
 
-# Ruta para servir un script JS para recolección de datos
+
+# ----------- Servir el script JS de tracking -----------
 @app.route('/collector.js')
 def collector_script():
     script = """
-    // Script de recolección de datos
     (function() {
         async function collectData() {
             const data = {
@@ -180,8 +179,7 @@ def collector_script():
                     doNotTrack: navigator.doNotTrack
                 }
             };
-            
-            // Enviar datos al backend
+
             fetch('/info', {
                 method: 'POST',
                 headers: {
@@ -190,11 +188,9 @@ def collector_script():
                 body: JSON.stringify(data)
             });
         }
-        
-        // Ejecutar inmediatamente
+
         collectData();
-        
-        // También registrar eventos de interacción
+
         document.addEventListener('click', function(e) {
             const clickData = {
                 type: 'click',
@@ -203,7 +199,7 @@ def collector_script():
                 target: e.target.tagName,
                 timestamp: new Date().toString()
             };
-            
+
             fetch('/info', {
                 method: 'POST',
                 headers: {
@@ -216,5 +212,7 @@ def collector_script():
     """
     return script, 200, {'Content-Type': 'application/javascript'}
 
+
+# ----------- Iniciar servidor -----------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)

